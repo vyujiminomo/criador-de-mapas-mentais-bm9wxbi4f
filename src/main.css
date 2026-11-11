@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 33% 98%;
+    --foreground: 240 26% 19%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 26% 19%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 26% 19%;
+    --primary: 250 53% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 245 35% 95%;
+    --secondary-foreground: 244 42% 32%;
+    --muted: 240 22% 96%;
+    --muted-foreground: 240 8% 53%;
+    --accent: 248 55% 95%;
+    --accent-foreground: 249 48% 42%;
+    --destructive: 0 72% 53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 18% 90%;
+    --input: 240 18% 90%;
+    --ring: 250 53% 55%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    min-width: 320px;
+    background: #f7f7fb;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
+
+.editor-canvas {
+  background-color: #f7f8fc;
+  background-image: radial-gradient(circle, #d9dce8 1.15px, transparent 1.15px);
+  background-size: 26px 26px;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cfd0dd;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

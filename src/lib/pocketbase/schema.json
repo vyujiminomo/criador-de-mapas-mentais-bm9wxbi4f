@@ -1,0 +1,192 @@
+{
+  "generatedAt": "2026-11-11T10:42:50.271Z",
+  "collections": [
+    {
+      "name": "users",
+      "type": "auth",
+      "apiRules": {
+        "list": "id = @request.auth.id",
+        "view": "id = @request.auth.id",
+        "create": "",
+        "update": "id = @request.auth.id",
+        "delete": "id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avatar",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
+        "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      ]
+    },
+    {
+      "name": "mind_maps",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner = @request.auth.id",
+        "view": "@request.auth.id != '' && owner = @request.auth.id",
+        "create": "@request.auth.id != '' && owner = @request.auth.id",
+        "update": "@request.auth.id != '' && owner = @request.auth.id && (@request.body.owner = '' || @request.body.owner = @request.auth.id)",
+        "delete": "@request.auth.id != '' && owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "primary_color",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "favorite",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_mind_maps_owner_updated ON mind_maps (owner, updated DESC)",
+        "CREATE INDEX idx_mind_maps_owner_favorite ON mind_maps (owner, favorite)"
+      ]
+    },
+    {
+      "name": "mind_nodes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner = @request.auth.id && map.owner = @request.auth.id",
+        "view": "@request.auth.id != '' && owner = @request.auth.id && map.owner = @request.auth.id",
+        "create": "@request.auth.id != '' && owner = @request.auth.id && map.owner = @request.auth.id",
+        "update": "@request.auth.id != '' && owner = @request.auth.id && map.owner = @request.auth.id && (@request.body.owner = '' || @request.body.owner = @request.auth.id)",
+        "delete": "@request.auth.id != '' && owner = @request.auth.id && map.owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "map",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "mind_maps"
+        },
+        {
+          "name": "parent",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "text",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "color",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "shape",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["rounded", "pill", "rectangle"]
+        },
+        {
+          "name": "sort_order",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_mind_nodes_map_sort ON mind_nodes (map, sort_order)",
+        "CREATE INDEX idx_mind_nodes_owner ON mind_nodes (owner)"
+      ]
+    }
+  ]
+}
