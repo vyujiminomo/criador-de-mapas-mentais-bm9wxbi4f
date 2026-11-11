@@ -73,8 +73,7 @@ export default function Editor() {
   const [zoom, setZoom] = useState(0.72)
   const [pan, setPan] = useState({ x: -250, y: -300 })
   const [loading, setLoading] = useState(true)
-  const [editingNode, setEditingNode] = useState<MindNode | null>(null)
-  const [nodeText, setNodeText] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [deleteMapOpen, setDeleteMapOpen] = useState(false)
@@ -217,8 +216,7 @@ export default function Editor() {
     })
     setNodesSynced((current) => [...current, child])
     setSelectedId(child.id)
-    setEditingNode(child)
-    setNodeText(child.text)
+    setEditingId(child.id)
   }
 
   async function duplicateSelected() {
@@ -258,11 +256,25 @@ export default function Editor() {
     schedule(`node-${selected.id}`, () => updateNode(selected.id, changes, selected.map))
   }
 
-  function saveNodeText() {
-    if (!editingNode) return
-    const text = nodeText.trim() || 'Novo tópico'
-    changeSelected({ text })
-    setEditingNode(null)
+  function startEditing(node: MindNode) {
+    setSelectedId(node.id)
+    setEditingId(node.id)
+  }
+
+  function commitNodeText(node: MindNode, text: string) {
+    setEditingId((current) => (current === node.id ? null : current))
+    const next = text.trim() || 'Novo tópico'
+    const current = nodesRef.current.find((item) => item.id === node.id)
+    if (!current || current.text === next) return
+    history.checkpoint(nodesRef.current)
+    setNodesSynced(
+      nodesRef.current.map((item) => (item.id === node.id ? { ...item, text: next } : item)),
+    )
+    schedule(`node-${node.id}`, () => updateNode(node.id, { text: next }, node.map))
+  }
+
+  function cancelNodeEdit(node: MindNode) {
+    setEditingId((current) => (current === node.id ? null : current))
   }
 
   async function saveTitle() {
@@ -373,6 +385,26 @@ export default function Editor() {
       window.removeEventListener('pointerup', onPointerUp)
     }
   }, [history, schedule, setNodesSynced, zoom])
+
+  // Enter coloca o nó selecionado em edição direto no balão
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      )
+        return
+      if (event.key !== 'Enter' || !selectedId) return
+      const node = nodesRef.current.find((item) => item.id === selectedId)
+      if (!node) return
+      event.preventDefault()
+      setEditingId(node.id)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId])
 
   function handleWheel(event: React.WheelEvent<HTMLDivElement>) {
     if (event.ctrlKey || event.metaKey) {
@@ -519,11 +551,10 @@ export default function Editor() {
           onCanvasPointerDown={handleCanvasPointerDown}
           onNodePointerDown={handleNodePointerDown}
           onNodeClick={(node) => setSelectedId(node.id)}
-          onNodeDoubleClick={(node) => {
-            setSelectedId(node.id)
-            setEditingNode(node)
-            setNodeText(node.text)
-          }}
+          onNodeDoubleClick={startEditing}
+          editingId={editingId}
+          onCommitNodeText={commitNodeText}
+          onCancelNodeEdit={cancelNodeEdit}
           onAddChild={(node) => void addChild(node)}
           onWheel={handleWheel}
         />
@@ -551,32 +582,6 @@ export default function Editor() {
         </div>
       </main>
 
-      <Dialog open={Boolean(editingNode)} onOpenChange={(open) => !open && setEditingNode(null)}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar texto do tópico</DialogTitle>
-            <DialogDescription>
-              Use uma frase curta para manter seu mapa fácil de ler.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            autoFocus
-            maxLength={280}
-            value={nodeText}
-            onChange={(event) => setNodeText(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && saveNodeText()}
-            className="h-11 rounded-xl"
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingNode(null)} className="rounded-xl">
-              Cancelar
-            </Button>
-            <Button onClick={saveNodeText} className="rounded-xl bg-[#6250ca] hover:bg-[#5544b8]">
-              Salvar texto
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Dialog open={deleteBranchOpen} onOpenChange={setDeleteBranchOpen}>
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
