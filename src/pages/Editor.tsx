@@ -15,6 +15,10 @@ import {
 import { EditorCanvas, CANVAS_HEIGHT, CANVAS_WIDTH } from '@/components/editor/EditorCanvas'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import { ZoomControls } from '@/components/editor/ZoomControls'
+import { MindDrawingOverlay } from '@/components/editor/MindDrawingOverlay'
+import { MindDrawingToolbar } from '@/components/editor/MindDrawingToolbar'
+import { AiNodeCreatorDialog } from '@/components/editor/AiNodeCreatorDialog'
+import { useMindmapAiIntegration } from '@/hooks/use-mindmap-ai-integration'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -125,6 +129,17 @@ export default function Editor() {
     () => nodes.find((node) => node.id === selectedId) ?? null,
     [nodes, selectedId],
   )
+
+  const ai = useMindmapAiIntegration({
+    map,
+    nodes,
+    selectedId,
+    nodesRef,
+    setNodesSynced,
+    setSelectedId,
+    checkpointHistory: (snap) => history.checkpoint(snap),
+    showToast: toast,
+  })
 
   const fitToScreen = useCallback((items = nodesRef.current) => {
     const element = canvasRef.current
@@ -544,33 +559,74 @@ export default function Editor() {
       <main className="relative min-h-0 flex-1">
         <EditorCanvas
           nodes={nodes}
-          selectedId={selectedId}
+          selectedId={ai.isDrawingMode ? null : selectedId}
           zoom={zoom}
           pan={pan}
           canvasRef={canvasRef}
-          onCanvasPointerDown={handleCanvasPointerDown}
-          onNodePointerDown={handleNodePointerDown}
-          onNodeClick={(node) => setSelectedId(node.id)}
-          onNodeDoubleClick={startEditing}
-          editingId={editingId}
+          onCanvasPointerDown={ai.isDrawingMode ? () => {} : handleCanvasPointerDown}
+          onNodePointerDown={ai.isDrawingMode ? () => {} : handleNodePointerDown}
+          onNodeClick={ai.isDrawingMode ? () => {} : (node) => setSelectedId(node.id)}
+          onNodeDoubleClick={ai.isDrawingMode ? () => {} : startEditing}
+          editingId={ai.isDrawingMode ? null : editingId}
           onCommitNodeText={commitNodeText}
           onCancelNodeEdit={cancelNodeEdit}
           onAddChild={(node) => void addChild(node)}
           onWheel={handleWheel}
         />
-        <EditorToolbar
-          selected={selected}
-          canDelete={Boolean(selected?.parent)}
-          canUndo={history.canUndo}
-          canRedo={history.canRedo}
-          onAdd={() => void addChild()}
-          onDuplicate={() => void duplicateSelected()}
-          onDelete={() => setDeleteBranchOpen(true)}
-          onColor={(color) => changeSelected({ color })}
-          onShape={(shape: NodeShape) => changeSelected({ shape })}
-          onUndo={() => applyHistory(history.undo())}
-          onRedo={() => applyHistory(history.redo())}
-        />
+
+        {/* Camada transparente de desenho livre quando o modo estiver ativo */}
+        {ai.isDrawingMode && (
+          <MindDrawingOverlay
+            strokes={ai.strokes}
+            tool={ai.drawingTool}
+            color={ai.drawingColor}
+            width={ai.drawingWidth}
+            zoom={zoom}
+            pan={pan}
+            onStrokeAdd={ai.handleStrokeAdd}
+            onEraseAt={ai.handleEraseAt}
+            onPanBy={(dx, dy) => setPan((current) => ({ x: current.x + dx, y: current.y + dy }))}
+          />
+        )}
+
+        {/* Barra de ferramentas: ou do desenho ou a padrão do editor */}
+        {ai.isDrawingMode ? (
+          <MindDrawingToolbar
+            tool={ai.drawingTool}
+            color={ai.drawingColor}
+            width={ai.drawingWidth}
+            strokeCount={ai.strokes.length}
+            canUndo={ai.canUndoDrawing}
+            canRedo={ai.canRedoDrawing}
+            isConverting={ai.isConvertingDrawing}
+            onToolChange={ai.setDrawingTool}
+            onColorChange={ai.setDrawingColor}
+            onWidthChange={ai.setDrawingWidth}
+            onUndo={ai.handleUndoDrawing}
+            onRedo={ai.handleRedoDrawing}
+            onClear={ai.handleClearDrawing}
+            onClose={() => ai.setIsDrawingMode(false)}
+            onConvert={(hint) => void ai.convertDrawingToNodes(hint)}
+          />
+        ) : (
+          <EditorToolbar
+            selected={selected}
+            canDelete={Boolean(selected?.parent)}
+            canUndo={history.canUndo}
+            canRedo={history.canRedo}
+            onAdd={() => void addChild()}
+            onDuplicate={() => void duplicateSelected()}
+            onDelete={() => setDeleteBranchOpen(true)}
+            onColor={(color) => changeSelected({ color })}
+            onShape={(shape: NodeShape) => changeSelected({ shape })}
+            onUndo={() => applyHistory(history.undo())}
+            onRedo={() => applyHistory(history.redo())}
+            onStartDrawing={() => ai.setIsDrawingMode(true)}
+            onOpenAiNodeDialog={() => ai.setAiNodeDialogOpen(true)}
+            isDrawingMode={ai.isDrawingMode}
+          />
+        )}
+
         <ZoomControls
           zoom={zoom}
           onZoomIn={() => setZoom((value) => clamp(value + 0.1, 0.28, 1.8))}
@@ -578,9 +634,20 @@ export default function Editor() {
           onFit={() => fitToScreen()}
         />
         <div className="pointer-events-none absolute bottom-6 left-5 z-20 hidden rounded-xl bg-white/80 px-3 py-2 text-xs text-[#8c8d9e] shadow-sm backdrop-blur sm:block">
-          Arraste o fundo para navegar · Duplo clique para editar
+          {ai.isDrawingMode
+            ? 'Modo de desenho ativo: rabisque à mão e clique em "Converter em Nós com IA"'
+            : 'Arraste o fundo para navegar · Duplo clique para editar'}
         </div>
       </main>
+
+      {/* Diálogo para criação de nó a partir de texto com a IA */}
+      <AiNodeCreatorDialog
+        open={ai.aiNodeDialogOpen}
+        onOpenChange={ai.setAiNodeDialogOpen}
+        selectedNode={selected}
+        isGenerating={ai.isGeneratingTextNode}
+        onSubmit={(prompt, attachToId) => ai.createNodeFromText(prompt, attachToId)}
+      />
 
       <Dialog open={deleteBranchOpen} onOpenChange={setDeleteBranchOpen}>
         <DialogContent className="rounded-2xl sm:max-w-md">

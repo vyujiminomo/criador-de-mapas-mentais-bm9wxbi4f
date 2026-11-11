@@ -1,4 +1,15 @@
-import { Circle, Copy, Palette, Plus, Redo2, Square, Trash2, Undo2 } from 'lucide-react'
+import {
+  Circle,
+  Copy,
+  Palette,
+  PenLine,
+  Plus,
+  Redo2,
+  Sparkles,
+  Square,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
@@ -17,6 +28,9 @@ interface EditorToolbarProps {
   onShape: (shape: NodeShape) => void
   onUndo: () => void
   onRedo: () => void
+  onStartDrawing?: () => void
+  onOpenAiNodeDialog?: () => void
+  isDrawingMode?: boolean
 }
 
 const shapes: { value: NodeShape; label: string; icon: typeof Circle }[] = [
@@ -37,6 +51,9 @@ export function EditorToolbar({
   onShape,
   onUndo,
   onRedo,
+  onStartDrawing,
+  onOpenAiNodeDialog,
+  isDrawingMode,
 }: EditorToolbarProps) {
   return (
     <div className="absolute left-1/2 top-4 z-30 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-2xl border border-[#e4e5ed] bg-white/95 p-1.5 shadow-[0_14px_40px_rgba(35,36,65,0.12)] backdrop-blur-xl sm:top-5">
@@ -51,6 +68,42 @@ export function EditorToolbar({
         <Plus className="mr-1.5 h-4 w-4" />
         Tópico
       </Button>
+
+      {onOpenAiNodeDialog && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onOpenAiNodeDialog}
+          className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5 font-medium text-[#6250ca] hover:bg-[#ece9ff] hover:text-[#5c49c2]"
+          aria-label="Escrever texto para a IA criar nó"
+          title="Escrever texto para a IA criar nó"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span className="hidden text-xs font-semibold sm:inline">Nó com IA</span>
+        </Button>
+      )}
+
+      {onStartDrawing && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onStartDrawing}
+          className={cn(
+            'h-9 shrink-0 gap-1.5 rounded-xl px-2.5 font-medium transition',
+            isDrawingMode
+              ? 'bg-[#ece9ff] text-[#5c49c2] ring-1 ring-[#5c49c2]/40'
+              : 'text-[#24243e] hover:bg-[#f1f2f8] hover:text-[#5c49c2]',
+          )}
+          aria-label="Desenhar à mão livre no mapa"
+          title="Desenhar à mão livre no mapa e converter em nós com IA"
+        >
+          <PenLine className="h-4 w-4 text-[#6250ca]" />
+          <span className="hidden text-xs font-semibold sm:inline">Desenhar</span>
+        </Button>
+      )}
+
+      <Separator orientation="vertical" className="mx-1 h-6" />
+
       <Button
         variant="ghost"
         size="icon"
