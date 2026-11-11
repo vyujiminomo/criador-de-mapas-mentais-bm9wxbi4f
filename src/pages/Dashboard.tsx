@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, Loader2, LogOut, Plus, Search, Sparkles, Star, X } from 'lucide-react'
+import {
+  ChevronDown,
+  Loader2,
+  LogOut,
+  Network,
+  PenLine,
+  Search,
+  Sparkles,
+  Star,
+  X,
+} from 'lucide-react'
 import { EmptyMaps } from '@/components/EmptyMaps'
 import { MapCard } from '@/components/MapCard'
+import { DrawingCard } from '@/components/gallery/DrawingCard'
+import { NewItemMenu } from '@/components/gallery/NewItemMenu'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,31 +35,46 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { createMap, deleteMap, duplicateMap, listMaps, updateMap } from '@/services/mindmaps'
+import {
+  createDrawing,
+  deleteDrawing,
+  duplicateDrawing,
+  listDrawings,
+  updateDrawing,
+} from '@/services/drawings'
 import type { MindMap } from '@/types/mindmap'
+import type { Drawing } from '@/types/drawing'
+import type { GalleryItem } from '@/types/gallery'
 import { getErrorMessage } from '@/lib/get-error-message'
+
+type ActiveFilter = 'all' | 'maps' | 'drawings' | 'favorites'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
   const { toast } = useToast()
   const [maps, setMaps] = useState<MindMap[]>([])
+  const [drawings, setDrawings] = useState<Drawing[]>([])
   const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState<'map' | 'drawing' | null>(null)
   const [query, setQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<'all' | 'favorites'>('all')
-  const [renameMap, setRenameMap] = useState<MindMap | null>(null)
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all')
+
+  const [renameTarget, setRenameTarget] = useState<GalleryItem | null>(null)
   const [renameTitle, setRenameTitle] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<MindMap | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<GalleryItem | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  const loadMaps = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      setMaps(await listMaps())
+      const [loadedMaps, loadedDrawings] = await Promise.all([listMaps(), listDrawings()])
+      setMaps(loadedMaps)
+      setDrawings(loadedDrawings)
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Não foi possível carregar seus mapas',
+        title: 'Não foi possível carregar seus itens',
         description: getErrorMessage(error),
       })
     } finally {
@@ -56,20 +83,34 @@ export default function Dashboard() {
   }, [toast])
 
   useEffect(() => {
-    void loadMaps()
-  }, [loadMaps])
+    void loadData()
+  }, [loadData])
 
-  const filteredMaps = useMemo(() => {
+  const galleryItems = useMemo<GalleryItem[]>(() => {
+    const list: GalleryItem[] = [
+      ...maps.map((m) => ({ kind: 'map' as const, data: m })),
+      ...drawings.map((d) => ({ kind: 'drawing' as const, data: d })),
+    ]
+    return list.sort(
+      (a, b) => new Date(b.data.updated).getTime() - new Date(a.data.updated).getTime(),
+    )
+  }, [maps, drawings])
+
+  const filteredItems = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('pt-BR')
-    return maps.filter((map) => {
-      const matchesSearch = !normalized || map.title.toLocaleLowerCase('pt-BR').includes(normalized)
-      const matchesFilter = activeFilter === 'all' || map.favorite
+    return galleryItems.filter((item) => {
+      const matchesSearch =
+        !normalized || item.data.title.toLocaleLowerCase('pt-BR').includes(normalized)
+      let matchesFilter = true
+      if (activeFilter === 'maps') matchesFilter = item.kind === 'map'
+      else if (activeFilter === 'drawings') matchesFilter = item.kind === 'drawing'
+      else if (activeFilter === 'favorites') matchesFilter = item.data.favorite
       return matchesSearch && matchesFilter
     })
-  }, [activeFilter, maps, query])
+  }, [activeFilter, galleryItems, query])
 
-  async function handleCreate() {
-    setCreating(true)
+  async function handleCreateMap() {
+    setCreating('map')
     try {
       const map = await createMap()
       navigate(`/mapas/${map.id}`)
@@ -80,11 +121,27 @@ export default function Dashboard() {
         description: getErrorMessage(error),
       })
     } finally {
-      setCreating(false)
+      setCreating(null)
     }
   }
 
-  async function handleFavorite(map: MindMap) {
+  async function handleCreateDrawing() {
+    setCreating('drawing')
+    try {
+      const drawing = await createDrawing()
+      navigate(`/desenhos/${drawing.id}`)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível criar o desenho',
+        description: getErrorMessage(error),
+      })
+    } finally {
+      setCreating(null)
+    }
+  }
+
+  async function handleFavoriteMap(map: MindMap) {
     setMaps((current) =>
       current.map((item) => (item.id === map.id ? { ...item, favorite: !item.favorite } : item)),
     )
@@ -101,7 +158,26 @@ export default function Dashboard() {
     }
   }
 
-  async function handleDuplicate(map: MindMap) {
+  async function handleFavoriteDrawing(drawing: Drawing) {
+    setDrawings((current) =>
+      current.map((item) =>
+        item.id === drawing.id ? { ...item, favorite: !item.favorite } : item,
+      ),
+    )
+    try {
+      const updated = await updateDrawing(drawing.id, { favorite: !drawing.favorite })
+      setDrawings((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    } catch (error) {
+      setDrawings((current) => current.map((item) => (item.id === drawing.id ? drawing : item)))
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível atualizar o favorito',
+        description: getErrorMessage(error),
+      })
+    }
+  }
+
+  async function handleDuplicateMap(map: MindMap) {
     try {
       const copy = await duplicateMap(map)
       setMaps((current) => [copy, ...current])
@@ -115,13 +191,35 @@ export default function Dashboard() {
     }
   }
 
+  async function handleDuplicateDrawing(drawing: Drawing) {
+    try {
+      const copy = await duplicateDrawing(drawing)
+      setDrawings((current) => [copy, ...current])
+      toast({
+        title: 'Desenho duplicado',
+        description: `“${copy.title}” está pronto para editar.`,
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível duplicar',
+        description: getErrorMessage(error),
+      })
+    }
+  }
+
   async function submitRename() {
-    if (!renameMap) return
+    if (!renameTarget) return
     setActionLoading(true)
     try {
-      const updated = await updateMap(renameMap.id, { title: renameTitle })
-      setMaps((current) => current.map((item) => (item.id === updated.id ? updated : item)))
-      setRenameMap(null)
+      if (renameTarget.kind === 'map') {
+        const updated = await updateMap(renameTarget.data.id, { title: renameTitle })
+        setMaps((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      } else {
+        const updated = await updateDrawing(renameTarget.data.id, { title: renameTitle })
+        setDrawings((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      }
+      setRenameTarget(null)
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -137,10 +235,16 @@ export default function Dashboard() {
     if (!deleteTarget) return
     setActionLoading(true)
     try {
-      await deleteMap(deleteTarget.id)
-      setMaps((current) => current.filter((item) => item.id !== deleteTarget.id))
+      if (deleteTarget.kind === 'map') {
+        await deleteMap(deleteTarget.data.id)
+        setMaps((current) => current.filter((item) => item.id !== deleteTarget.data.id))
+        toast({ title: 'Mapa excluído' })
+      } else {
+        await deleteDrawing(deleteTarget.data.id)
+        setDrawings((current) => current.filter((item) => item.id !== deleteTarget.data.id))
+        toast({ title: 'Desenho excluído' })
+      }
       setDeleteTarget(null)
-      toast({ title: 'Mapa excluído' })
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -176,7 +280,7 @@ export default function Dashboard() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar mapas..."
+              placeholder="Buscar mapas e desenhos..."
               className="h-11 rounded-xl border-transparent bg-[#f3f3f8] pl-11 pr-10 focus-visible:border-[#7262d3] focus-visible:ring-2 focus-visible:ring-[#7262d3]/15"
             />
             {query && (
@@ -224,37 +328,50 @@ export default function Dashboard() {
               Olá, {firstName} <span aria-hidden>👋</span>
             </h1>
             <p className="mt-2 text-[#858697]">
-              Capture, conecte e transforme suas ideias em planos.
+              Crie mapas mentais ou rabisque livremente em desenhos.
             </p>
           </div>
-          <Button
-            onClick={handleCreate}
-            disabled={creating}
-            className="h-12 rounded-xl bg-[#6250ca] px-5 text-base font-semibold shadow-lg shadow-[#6250ca]/20 hover:bg-[#5544b8]"
-          >
-            {creating ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <Plus className="mr-2 h-5 w-5" />
-            )}
-            Novo mapa
-          </Button>
+          <NewItemMenu
+            creating={creating}
+            onCreateMap={handleCreateMap}
+            onCreateDrawing={handleCreateDrawing}
+          />
         </div>
 
-        <div className="mt-11 flex items-center justify-between border-b border-[#e4e5ed]">
-          <div className="flex gap-7">
+        <div className="mt-11 flex items-center justify-between overflow-x-auto border-b border-[#e4e5ed]">
+          <div className="flex gap-6 sm:gap-7">
             <button
               onClick={() => setActiveFilter('all')}
-              className={`relative pb-4 text-sm font-semibold transition ${activeFilter === 'all' ? 'text-[#5c49c2]' : 'text-[#898a9c] hover:text-[#4d4d60]'}`}
+              className={`relative shrink-0 pb-4 text-sm font-semibold transition ${activeFilter === 'all' ? 'text-[#5c49c2]' : 'text-[#898a9c] hover:text-[#4d4d60]'}`}
             >
-              Todos os mapas
+              Todos ({galleryItems.length})
               <span
                 className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#6250ca] transition ${activeFilter === 'all' ? 'opacity-100' : 'opacity-0'}`}
               />
             </button>
             <button
+              onClick={() => setActiveFilter('maps')}
+              className={`relative flex shrink-0 items-center gap-2 pb-4 text-sm font-semibold transition ${activeFilter === 'maps' ? 'text-[#5c49c2]' : 'text-[#898a9c] hover:text-[#4d4d60]'}`}
+            >
+              <Network className="h-4 w-4" />
+              Mapas ({maps.length})
+              <span
+                className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#6250ca] transition ${activeFilter === 'maps' ? 'opacity-100' : 'opacity-0'}`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveFilter('drawings')}
+              className={`relative flex shrink-0 items-center gap-2 pb-4 text-sm font-semibold transition ${activeFilter === 'drawings' ? 'text-[#5c49c2]' : 'text-[#898a9c] hover:text-[#4d4d60]'}`}
+            >
+              <PenLine className="h-4 w-4" />
+              Desenhos ({drawings.length})
+              <span
+                className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#6250ca] transition ${activeFilter === 'drawings' ? 'opacity-100' : 'opacity-0'}`}
+              />
+            </button>
+            <button
               onClick={() => setActiveFilter('favorites')}
-              className={`relative flex items-center gap-2 pb-4 text-sm font-semibold transition ${activeFilter === 'favorites' ? 'text-[#5c49c2]' : 'text-[#898a9c] hover:text-[#4d4d60]'}`}
+              className={`relative flex shrink-0 items-center gap-2 pb-4 text-sm font-semibold transition ${activeFilter === 'favorites' ? 'text-[#5c49c2]' : 'text-[#898a9c] hover:text-[#4d4d60]'}`}
             >
               <Star className={`h-4 w-4 ${activeFilter === 'favorites' ? 'fill-current' : ''}`} />
               Favoritos
@@ -263,8 +380,8 @@ export default function Dashboard() {
               />
             </button>
           </div>
-          <span className="pb-4 text-sm text-[#aaaabb]">
-            {filteredMaps.length} {filteredMaps.length === 1 ? 'mapa' : 'mapas'}
+          <span className="hidden shrink-0 pb-4 text-sm text-[#aaaabb] sm:block">
+            {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'itens'}
           </span>
         </div>
 
@@ -274,24 +391,40 @@ export default function Dashboard() {
           </div>
         ) : (
           <section className="mt-7 grid gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {filteredMaps.map((map) => (
-              <MapCard
-                key={map.id}
-                map={map}
-                onOpen={() => navigate(`/mapas/${map.id}`)}
-                onRename={() => {
-                  setRenameMap(map)
-                  setRenameTitle(map.title)
-                }}
-                onDuplicate={() => void handleDuplicate(map)}
-                onFavorite={() => void handleFavorite(map)}
-                onDelete={() => setDeleteTarget(map)}
-              />
-            ))}
-            {!filteredMaps.length && (
+            {filteredItems.map((item) =>
+              item.kind === 'map' ? (
+                <MapCard
+                  key={`map-${item.data.id}`}
+                  map={item.data}
+                  onOpen={() => navigate(`/mapas/${item.data.id}`)}
+                  onRename={() => {
+                    setRenameTarget(item)
+                    setRenameTitle(item.data.title)
+                  }}
+                  onDuplicate={() => void handleDuplicateMap(item.data)}
+                  onFavorite={() => void handleFavoriteMap(item.data)}
+                  onDelete={() => setDeleteTarget(item)}
+                />
+              ) : (
+                <DrawingCard
+                  key={`drawing-${item.data.id}`}
+                  drawing={item.data}
+                  onOpen={() => navigate(`/desenhos/${item.data.id}`)}
+                  onRename={() => {
+                    setRenameTarget(item)
+                    setRenameTitle(item.data.title)
+                  }}
+                  onDuplicate={() => void handleDuplicateDrawing(item.data)}
+                  onFavorite={() => void handleFavoriteDrawing(item.data)}
+                  onDelete={() => setDeleteTarget(item)}
+                />
+              ),
+            )}
+            {!filteredItems.length && (
               <EmptyMaps
-                searching={Boolean(query) || activeFilter === 'favorites'}
-                onCreate={handleCreate}
+                searching={Boolean(query) || activeFilter !== 'all'}
+                onCreateMap={handleCreateMap}
+                onCreateDrawing={handleCreateDrawing}
                 onClearSearch={() => {
                   setQuery('')
                   setActiveFilter('all')
@@ -302,12 +435,14 @@ export default function Dashboard() {
         )}
       </main>
 
-      <Dialog open={Boolean(renameMap)} onOpenChange={(open) => !open && setRenameMap(null)}>
+      <Dialog open={Boolean(renameTarget)} onOpenChange={(open) => !open && setRenameTarget(null)}>
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Renomear mapa</DialogTitle>
+            <DialogTitle>
+              {renameTarget?.kind === 'map' ? 'Renomear mapa' : 'Renomear desenho'}
+            </DialogTitle>
             <DialogDescription>
-              Escolha um nome claro para encontrar seu mapa rapidamente.
+              Escolha um nome claro para encontrar seu item rapidamente.
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -319,7 +454,7 @@ export default function Dashboard() {
             className="h-11 rounded-xl"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameMap(null)} className="rounded-xl">
+            <Button variant="outline" onClick={() => setRenameTarget(null)} className="rounded-xl">
               Cancelar
             </Button>
             <Button
@@ -336,9 +471,11 @@ export default function Dashboard() {
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Excluir “{deleteTarget?.title}”?</DialogTitle>
+            <DialogTitle>Excluir “{deleteTarget?.data.title}”?</DialogTitle>
             <DialogDescription>
-              O mapa e todos os seus tópicos serão removidos. Essa ação não pode ser desfeita.
+              {deleteTarget?.kind === 'map'
+                ? 'O mapa e todos os seus tópicos serão removidos. Essa ação não pode ser desfeita.'
+                : 'O desenho e todos os seus traços serão removidos. Essa ação não pode ser desfeita.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -351,7 +488,7 @@ export default function Dashboard() {
               variant="destructive"
               className="rounded-xl"
             >
-              Excluir mapa
+              {deleteTarget?.kind === 'map' ? 'Excluir mapa' : 'Excluir desenho'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/toaster'
 import Auth from '@/pages/Auth'
 import Dashboard from '@/pages/Dashboard'
 import Editor from '@/pages/Editor'
+import DrawingEditor from '@/pages/DrawingEditor'
 import NotFound from '@/pages/NotFound'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Editor />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/desenhos/:id"
+        element={
+          <ProtectedRoute>
+            <DrawingEditor />
           </ProtectedRoute>
         }
       />

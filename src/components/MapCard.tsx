@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy, MoreHorizontal, Pencil, Star, Trash2 } from 'lucide-react'
+import { Copy, MoreHorizontal, Network, Pencil, Star, Trash2 } from 'lucide-react'
 import { MapThumbnail } from '@/components/MapThumbnail'
 import { Button } from '@/components/ui/button'
 import {
@@ -56,14 +56,20 @@ export function MapCard({
 
   return (
     <article className="group overflow-hidden rounded-2xl border border-[#e5e6ef] bg-white shadow-[0_10px_30px_rgba(38,40,75,0.05)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_45px_rgba(38,40,75,0.1)]">
-      <button
-        type="button"
-        className="block h-52 w-full cursor-pointer text-left"
-        onClick={onOpen}
-        aria-label={`Abrir ${map.title}`}
-      >
-        <MapThumbnail nodes={nodes} primaryColor={map.primaryColor} className="h-full w-full" />
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          className="block h-52 w-full cursor-pointer text-left"
+          onClick={onOpen}
+          aria-label={`Abrir ${map.title}`}
+        >
+          <MapThumbnail nodes={nodes} primaryColor={map.primaryColor} className="h-full w-full" />
+        </button>
+        <span className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-lg border border-[#e2e3eb] bg-white/90 px-2.5 py-1 text-xs font-semibold text-[#5c49c2] shadow-sm backdrop-blur">
+          <Network className="h-3 w-3" />
+          Mapa mental
+        </span>
+      </div>
       <div className="flex items-start gap-3 p-5">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
           <h3 className="truncate text-[17px] font-semibold text-[#24243e]">{map.title}</h3>
